@@ -31,27 +31,32 @@ public class MQReceiver {
     private SeckillService seckillService;
 
 
+    /**
+     *
+     * 消费时，查库存、减库存、添加订单都是在数据库操作的，然后把数据输出到redis供结果查询
+     */
     @RabbitListener(queues = MQConfig.SECKILL_QUEUE)
     public void receive(String message) {
         log.info("receive message:" + message);
+
         SeckillMessage seckillMessage = RedisService.stringToBean(message, SeckillMessage.class);
         SeckillUser user = seckillMessage.getSeckillUser();
         long goodsId = seckillMessage.getGoodsId();
 
-        //判断库存
+        //去数据库判断该商品的库存
         GoodsVO goods = goodsService.getGoodsVOById(goodsId);
         int stock = goods.getStockCount();
         if (stock < 1) {
             return;
         }
 
-        //判断是否已经秒杀到了
+        //有库存时，判断是否已经秒杀到了
         SeckillOrder order = orderService.getSeckillOrderByUserIdGoodsId(user.getId(), goodsId);
         if (order != null) {
             return;
         }
 
-        //减库存 下订单 写入秒杀订单
+        //没有秒杀到时，数据库减库存数量并创建订单，在Redis中设置该商品秒杀结束
         seckillService.seckill(user, goods);
     }
 

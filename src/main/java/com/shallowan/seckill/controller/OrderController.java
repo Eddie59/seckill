@@ -46,7 +46,6 @@ public class OrderController {
         if (order == null) {
             return Result.error(CodeMsg.ORDER_NOT_EXIST);
         }
-
         long goodsId = order.getGoodsId();
         GoodsVO goodsVO = goodsService.getGoodsVOById(goodsId);
         OrderDetailVO orderDetailVO = new OrderDetailVO();

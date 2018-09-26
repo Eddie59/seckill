@@ -25,7 +25,6 @@ public class OrderService {
     private RedisService redisService;
 
     public SeckillOrder getSeckillOrderByUserIdGoodsId(Long userId, long goodsId) {
-
         return redisService.get(OrderKey.getSeckillOrderByUidGid, "" + userId + "_" + goodsId, SeckillOrder.class);
     }
 
@@ -35,6 +34,7 @@ public class OrderService {
 
     @Transactional
     public OrderInfo createOrder(SeckillUser seckillUser, GoodsVO goods) {
+        //往数据库中添加订单数据
         OrderInfo orderInfo = new OrderInfo();
         orderInfo.setCreateTime(new Date());
         orderInfo.setDeliveryAddrId(0L);
@@ -45,15 +45,18 @@ public class OrderService {
         orderInfo.setStatus(0);
         orderInfo.setUserId(seckillUser.getId());
         orderDao.insert(orderInfo);
-
         SeckillOrder seckillOrder = new SeckillOrder();
         seckillOrder.setOrderId(orderInfo.getId());
         seckillOrder.setUserId(1L);
         seckillOrder.setGoodsId(goods.getId());
         orderDao.insertSeckillOrder(seckillOrder);
 
-        redisService.set(OrderKey.getSeckillOrderByUidGid, "" + seckillUser.getId() + "_" + goods.getId(), seckillOrder);
-
+        //把订单信息写入redis
+        redisService.set(
+                OrderKey.getSeckillOrderByUidGid,
+                "" + seckillUser.getId() + "_" + goods.getId(),
+                seckillOrder
+        );
         return orderInfo;
     }
 

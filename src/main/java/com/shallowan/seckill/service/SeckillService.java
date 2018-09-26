@@ -36,33 +36,42 @@ public class SeckillService {
 
     @Transactional
     public OrderInfo seckill(SeckillUser seckillUser, GoodsVO goods) {
-        //减库存 下订单 写入秒杀订单
+        //从数据库减库存
         boolean success = goodsService.reduceStock(goods);
-
+        //在数据库中创建订单数据，并写入redis，并返回；检查是否秒杀到了时使用
         if (success) {
-            //order_info seckill_order
             return orderService.createOrder(seckillUser, goods);
         }
+        //到这里，库存被消耗完了，设置商品秒杀完毕
         setGoodsOver(goods.getId());
         return null;
 
     }
 
+    /**
+     *
+     * @param userId 用户id
+     * @param goodsId 商品id
+     * @return 用户是否秒杀到商品
+     */
     public long getSeckillResult(Long userId, long goodsId) {
-
+        //从库里查询是否秒杀到
         SeckillOrder seckillOrder = orderService.getSeckillOrderByUserIdGoodsId(userId, goodsId);
 
+        //秒杀成功，返回订单id
         if (seckillOrder != null) {
-            //秒杀成功
             return seckillOrder.getOrderId();
-        } else {
-            boolean isOver = getGoodsOver(goodsId);
-            if (isOver) {
-                return -1;
-            } else {
-                return 0;
-            }
         }
+        //没有秒杀成功，查看商品是否结束
+        boolean isOver = getGoodsOver(goodsId);
+        if (isOver) {
+            //秒杀已经结束
+            return -1;
+        } else {
+            //秒杀还没有结束
+            return 0;
+        }
+
     }
 
     private boolean getGoodsOver(long goodsId) {
@@ -70,8 +79,11 @@ public class SeckillService {
     }
 
     public void setGoodsOver(Long goodsId) {
-        redisService.set(SeckillKey.isGoodsOver, "" + goodsId, true);
-
+        redisService.set(
+                SeckillKey.isGoodsOver,
+                "" + goodsId,
+                true
+        );
     }
 
     public void reset(List<GoodsVO> goodsVOList) {
@@ -88,9 +100,11 @@ public class SeckillService {
     }
 
     public String createSeckillPath(SeckillUser seckillUser, long goodsId) {
-
         String str = MD5Util.md5(UUIDUtil.uuid() + "123456");
-        redisService.set(SeckillKey.getSeckillPath, "" + seckillUser.getId() + "_" + goodsId, str);
+        redisService.set(
+                SeckillKey.getSeckillPath,
+                "" + seckillUser.getId() + "_" + goodsId,
+                str);
         return str;
     }
 
@@ -125,7 +139,9 @@ public class SeckillService {
         g.dispose();
         //把验证码存到redis中
         int rnd = calc(verifyCode);
-        redisService.set(SeckillKey.getSeckillVerifyCode, seckillUser.getId() + "," + goodsId, rnd);
+        redisService.set(SeckillKey.getSeckillVerifyCode,
+                seckillUser.getId() + "," + goodsId,
+                rnd);
         //输出图片
         return image;
     }

@@ -58,11 +58,6 @@
                 <span id="miaoshaTip"></span>
             </td>
             <td>
-                <!--
-                    <form id="miaoshaForm" method="post" action="/miaosha/do_miaosha">
-                        <button class="btn btn-primary btn-block" type="submit" id="buyButton">立即秒杀</button>
-                        <input type="hidden" name="goodsId"  id="goodsId" />
-                    </form>-->
                 <div class="row">
                     <div class="form-inline">
                         <img id="verifyCodeImg" width="80" height="32"  style="display:none" onclick="refreshVerifyCode()"/>
@@ -126,7 +121,8 @@
                     var result = data.data;
                     if (result < 0) {
                         layer.msg("对不起，秒杀失败");
-                    } else if (result == 0) {//继续轮询
+                    } else if (result == 0) {
+                        //继续轮询
                         setTimeout(function () {
                             getMiaoshaResult(goodsId);
                         }, 50);

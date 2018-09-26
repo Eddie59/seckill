@@ -34,18 +34,21 @@ public class AccessInterceptor extends HandlerInterceptorAdapter {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         if (handler instanceof HandlerMethod) {
-            SeckillUser seckillUser = getUser(request, response);
-            UserContext.setUser(seckillUser);
 
+            //去拿执行方法的AccessLimit注解
             HandlerMethod method = (HandlerMethod) handler;
             AccessLimit accessLimit = method.getMethodAnnotation(AccessLimit.class);
             if (accessLimit == null) {
                 return true;
             }
-
             int seconds = accessLimit.seconds();
             int maxCount = accessLimit.maxCount();
             boolean needLogin = accessLimit.needLogin();
+
+
+            //需要登陆，在redis又找不到用户信息时，返回错误码
+            SeckillUser seckillUser = getUser(request, response);
+            UserContext.setUser(seckillUser);
             String key = request.getRequestURI();
             if (needLogin) {
                 if (seckillUser == null) {
@@ -55,13 +58,16 @@ public class AccessInterceptor extends HandlerInterceptorAdapter {
                 key += "_" + seckillUser.getId();
             }
 
-            //martin fowler,重构-改善既有代码的设计
+
+            //使用Redis的过期时间来做限流，对于一个接口，如果在redis有效时间内超过指定的访问次数，直接返回，不去请求接口
             AccessKey accessKey = AccessKey.withExpire(seconds);
-            //查询访问的次数
+            //查询访问次数
             Integer count = redisService.get(accessKey, key, Integer.class);
             if (count == null) {
+                //第一次设置时，会给redis设置“过期时间”
                 redisService.set(accessKey, key, 1);
             } else if (count < maxCount) {
+                //在过期时间内超过maxCount，会返回频繁访问
                 redisService.incr(accessKey, key);
             } else {
                 render(response, CodeMsg.ACCESS_LIMIT_REACHED);
@@ -81,10 +87,16 @@ public class AccessInterceptor extends HandlerInterceptorAdapter {
         outputStream.close();
     }
 
+
+    /**
+     *
+     * @param request
+     * @param response
+     * @return 从request或者cooke中获取token，拿到token去redis获取用户信息
+     */
     private SeckillUser getUser(HttpServletRequest request, HttpServletResponse response) {
         String paramToken = request.getParameter(SeckillUserService.COOKIE_NAME_TOKEN);
         String cookieToken = CookieUtil.getCookieValue(request, SeckillUserService.COOKIE_NAME_TOKEN);
-
         if (StringUtils.isEmpty(cookieToken) && StringUtils.isEmpty(paramToken)) {
             return null;
         }

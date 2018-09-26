@@ -1,5 +1,6 @@
 package com.shallowan.seckill.controller;
 
+import com.shallowan.seckill.access.AccessLimit;
 import com.shallowan.seckill.domain.SeckillUser;
 import com.shallowan.seckill.redis.GoodsKey;
 import com.shallowan.seckill.redis.RedisService;
@@ -147,7 +148,7 @@ public class GoodsController {
     @ResponseBody
     public String detail(HttpServletRequest request, HttpServletResponse response, Model model, SeckillUser user,
                          @PathVariable("goodsId") long goodsId) {
-        model.addAttribute("user", user);
+
         //取缓存
         String html = redisService.get(GoodsKey.getGoodsDetail, "" + goodsId, String.class);
         if (!StringUtils.isEmpty(html)) {
@@ -162,6 +163,7 @@ public class GoodsController {
 
         Map<String, Integer> map = checkTime(startAt, endAt);
 
+        model.addAttribute("user", user);
         model.addAttribute("seckillStatus", map.get("seckillStatus"));
         model.addAttribute("remainSeconds", map.get("remainSeconds"));
 //      return "goods_detail";

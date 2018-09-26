@@ -47,10 +47,9 @@ public class RedisService {
     /**
      * 设置对象
      *
-     * @param prefix
-     * @param key
-     * @param value
-     * @param <T>
+     * @param prefix prefix包括组成redis的key的前半部分的前缀和后半部分的过期时间（前缀：过期时间）
+     * @param key 组成redis key的后半部分的key
+     * @param <T> 保存在redis的对象
      * @return
      */
     public <T> boolean set(KeyPrefix prefix, String key, T value) {
@@ -65,8 +64,10 @@ public class RedisService {
             String realKey = prefix.getPrefix() + key;
             int seconds = prefix.expireSeconds();
             if (seconds < 1) {
+                //0为无限期
                 jedis.set(realKey, str);
             } else {
+                //设置过期时间
                 jedis.setex(realKey, seconds, str);
             }
 

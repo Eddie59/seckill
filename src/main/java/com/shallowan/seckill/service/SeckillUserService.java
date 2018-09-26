@@ -34,6 +34,11 @@ public class SeckillUserService {
     @Autowired
     private RedisService redisService;
 
+    /**
+     *
+     * @param id
+     * @return 先去redis中找，再去数据库中找
+     */
     public SeckillUser getById(long id) {
         //取缓存
         SeckillUser user = redisService.get(SeckillUserKey.getById, "" + id, SeckillUser.class);
@@ -88,32 +93,41 @@ public class SeckillUserService {
         if (!calcPass.equals(dbPass)) {
             throw new GlobalException(CodeMsg.PASSWORD_ERROR);
         }
-        String token = UUIDUtil.uuid();
         //生成cookie
+        String token = UUIDUtil.uuid();
         addCookie(response, token, user);
         return token;
     }
+
 
     public SeckillUser getByToken(HttpServletResponse response, String token) {
         if (StringUtils.isEmpty(token)) {
             return null;
         }
         SeckillUser user = redisService.get(SeckillUserKey.token, token, SeckillUser.class);
+        //延迟有效时间
         if (user != null) {
-            //延迟有效时间
             addCookie(response, token, user);
         }
-
         return user;
     }
 
+    /**
+     *
+     * @param response
+     * @param token
+     * @param user
+     * 把生成的token保存到redis，并添加到response
+     */
     private void addCookie(HttpServletResponse response, String token, SeckillUser user) {
-
-
         Cookie cookie = new Cookie(COOKIE_NAME_TOKEN, token);
+
+        //把会话的token及user保存在redis
         redisService.set(SeckillUserKey.token, token, user);
+
         cookie.setMaxAge(SeckillUserKey.token.expireSeconds());
         cookie.setPath("/");
+
         response.addCookie(cookie);
     }
 }

@@ -59,6 +59,7 @@ import java.util.Map;
  * 1.添加生成验证码的接口
  * 2.在获取秒杀路径的时候，验证验证码
  * 3.ScriptEngine使用
+ * <p>
  * 接口防刷
  * 对接口做限流
  * 思路：
@@ -149,6 +150,17 @@ public class SeckillController implements InitializingBean {
 //
 //    }
 
+
+    /**
+     *
+     * @param seckillUser
+     * @param goodsId
+     * @param path
+     * @return 整个秒杀接口都没有访问数据库，访问redis，加入队列
+     * 参数path为接口路径的一部分，要去redis中校验path，通过才会调用秒杀接口，也就是使用redis对接口加了一层验证码验证，使用redis的过期时间，对
+     * 同一接口做了限流
+     *
+     * */
     @ApiOperation("秒杀接口")
     @ApiImplicitParams({
             @ApiImplicitParam(name = "goodsId", value = "商品ID", required = true, dataType = "Long"),
@@ -161,40 +173,48 @@ public class SeckillController implements InitializingBean {
                                    @RequestParam("goodsId") long goodsId,
                                    @PathVariable("path") String path) {
 
-        //验证path
+        //验证path，通过，说明已经验证过验证码了
         boolean check = seckillService.checkPath(seckillUser, goodsId, path);
         if (!check) {
             return Result.error(CodeMsg.REQUEST_ILLEGAL);
         }
-        //内存标记，减少redis访问
+        //减少redis访问
         boolean over = localOverMap.get(goodsId);
         if (over) {
             return Result.error(CodeMsg.SECKILL_OVER);
         }
 
-        //预减库存
+        //预减redis库存
         long stock = redisService.decr(GoodsKey.getSeckillGoodsStock, "" + goodsId);
         if (stock < 0) {
+            //在内存中标记已经秒杀完毕
             localOverMap.put(goodsId, true);
             return Result.error(CodeMsg.SECKILL_OVER);
         }
 
-        //判断是否已经秒杀到了
+        //判断是否已经秒杀到了(禁止重复秒杀)
         SeckillOrder seckillOrder = orderService.getSeckillOrderByUserIdGoodsId(seckillUser.getId(), goodsId);
         if (seckillOrder != null) {
             return Result.error(CodeMsg.REPEATE_SECKILL);
         }
 
-        //入队
+        //入队,去队列中排队
         SeckillMessage message = new SeckillMessage();
         message.setSeckillUser(seckillUser);
         message.setGoodsId(goodsId);
         sender.sendSeckillMessage(message);
 
-        //排队中
         return Result.success(0);
     }
 
+    /**
+     *
+     * @param request
+     * @param seckillUser
+     * @param goodsId
+     * @param verifyCode
+     * @return 验证码通过后，生成uuid保存到redis，秒杀接口要验证这个uuid，返回uuid给前端，前端拿着去调用秒杀接口
+     */
     @ApiOperation("秒杀路径获取接口")
     @ApiImplicitParams({
             @ApiImplicitParam(name = "goodsId", value = "商品ID", required = true, dataType = "Long"),
@@ -203,7 +223,8 @@ public class SeckillController implements InitializingBean {
     @GetMapping("/path")
     @ResponseBody
     @AccessLimit(seconds = 5, maxCount = 5)
-    public Result<String> getSeckillPath(HttpServletRequest request, SeckillUser seckillUser,
+    public Result<String> getSeckillPath(HttpServletRequest request,
+                                         SeckillUser seckillUser,
                                          @RequestParam("goodsId") long goodsId,
                                          @RequestParam(value = "verifyCode", defaultValue = "0") int verifyCode) {
 
@@ -236,12 +257,20 @@ public class SeckillController implements InitializingBean {
         return Result.success(result);
     }
 
+    /**
+     *
+     * @param response
+     * @param seckillUser
+     * @param goodsId
+     * @return 画出验证码码
+     */
     @ApiOperation("获取验证码接口")
     @ApiImplicitParam(name = "goodsId", value = "商品ID", required = true, dataType = "Long")
     @GetMapping("/verifyCode")
     @ResponseBody
     @AccessLimit(seconds = 5, maxCount = 5)
-    public Result<String> getVerifyCode(HttpServletResponse response, SeckillUser seckillUser,
+    public Result<String> getVerifyCode(HttpServletResponse response,
+                                        SeckillUser seckillUser,
                                         @RequestParam("goodsId") long goodsId) {
         response.setContentType("application/json;charset=UTF-8");
         BufferedImage image = seckillService.createVerifyCode(seckillUser, goodsId);
